@@ -4,4 +4,5 @@
     'depends': ['base'],
     'author': 'Your Name',
     'installable': True,
+    'application': True,
 }
