@@ -12,6 +12,18 @@
 
                     <div class="row mt16 o_settings_container">
 
+                        <!-- 🔥 NEW: Default Position Dropdown -->
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane">
+                                <label for="logo_position"/>
+                                <div class="text-muted">Default logo position (used if X/Y not changed)</div>
+                                <field name="logo_position"/>
+                            </div>
+                        </div>
+
+                        <!-- EXISTING FIELDS (UNCHANGED) -->
+
                         <div class="col-12 col-lg-6 o_setting_box">
                             <div class="o_setting_left_pane"/>
                             <div class="o_setting_right_pane">
