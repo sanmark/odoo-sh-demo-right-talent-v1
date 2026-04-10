@@ -20,10 +20,19 @@ class IrAttachment(models.Model):
                     logo_data = base64.b64decode(logo)
 
                     for page in pdf:
-                        rect = fitz.Rect(50, 50, 150, 100)
+                        config = record.env['ir.config_parameter'].sudo()
+
+                        x = int(config.get_param('auto_logo_pdf.logo_x', 50))
+                        y = int(config.get_param('auto_logo_pdf.logo_y', 50))
+                        w = int(config.get_param('auto_logo_pdf.logo_width', 100))
+                        h = int(config.get_param('auto_logo_pdf.logo_height', 50))
+
+                        rect = fitz.Rect(x, y, x + w, y + h)
                         page.insert_image(rect, stream=logo_data)
 
                     new_pdf = pdf.tobytes()
+                    pdf.close()
+                    
                     record.datas = base64.b64encode(new_pdf)
 
             except Exception as e:

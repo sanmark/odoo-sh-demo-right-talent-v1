@@ -1,0 +1,20 @@
+<odoo>
+    <record id="view_auto_logo_settings" model="ir.ui.view">
+        <field name="name">auto.logo.settings</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+
+            <!-- Correct XPath -->
+            <xpath expr="//form" position="inside">
+                <group string="Auto Logo PDF Settings">
+                    <field name="logo_x"/>
+                    <field name="logo_y"/>
+                    <field name="logo_width"/>
+                    <field name="logo_height"/>
+                </group>
+            </xpath>
+
+        </field>
+    </record>
+</odoo>
