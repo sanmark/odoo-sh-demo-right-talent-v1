@@ -5,5 +5,5 @@
     'author': 'Your Name',
     'installable': True,
     'application': True,
-    'license': 'LGPLv3',
+    'license': 'LGPL-3',
 }
