@@ -1,5 +1,3 @@
-import base64
-
 import fitz  # PyMuPDF
 
 from odoo import api, models
@@ -13,11 +11,11 @@ class IrAttachment(models.Model):
         records = super().create(vals_list)
 
         for record in records:
-            if record.mimetype != 'application/pdf' or not record.datas:
+            if record.mimetype != 'application/pdf' or not record.raw:
                 continue
 
             try:
-                pdf_data = record.datas.content
+                pdf_data = record.raw.content
                 pdf = fitz.open(stream=pdf_data, filetype="pdf")
 
                 company = record.env.company
@@ -84,7 +82,7 @@ class IrAttachment(models.Model):
                     pdf.close()
 
                     record.write({
-                        'datas': base64.b64encode(new_pdf),
+                        'raw': new_pdf,
                     })
 
             except Exception as e:
