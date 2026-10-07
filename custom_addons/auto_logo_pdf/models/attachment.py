@@ -8,84 +8,105 @@ class IrAttachment(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        records = super().create(vals_list)
+        return super().create(vals_list)
 
-        for record in records:
-            if record.mimetype != 'application/pdf' or not record.raw:
-                continue
+    def write(self, vals):
+        if 'raw' in vals and vals['raw']:
+            raw_value = vals['raw']
 
-            try:
-                pdf_data = record.raw.content
-                pdf = fitz.open(stream=pdf_data, filetype="pdf")
+            if hasattr(raw_value, 'content'):
+                pdf_data = raw_value.content
+            else:
+                pdf_data = raw_value
 
-                company = record.env.company
-                logo = company.logo
-
-                if logo:
-                    logo_data = logo.content
-
-                    config = record.env['ir.config_parameter'].sudo()
-
-                    position = config.get_str(
-                        'auto_logo_pdf.logo_position',
-                        default='top_left',
-                    )
-                    x = config.get_int(
-                        'auto_logo_pdf.logo_x',
-                        default=50,
-                    )
-                    y = config.get_int(
-                        'auto_logo_pdf.logo_y',
-                        default=50,
-                    )
-                    w = config.get_int(
-                        'auto_logo_pdf.logo_width',
-                        default=100,
-                    )
-                    h = config.get_int(
-                        'auto_logo_pdf.logo_height',
-                        default=50,
+            if pdf_data:
+                try:
+                    pdf = fitz.open(
+                        stream=pdf_data,
+                        filetype="pdf",
                     )
 
-                    for page in pdf:
-                        page_width = page.rect.width
-                        page_height = page.rect.height
+                    for record in self:
+                        company = record.env.company
+                        logo = company.logo
 
-                        if x == 50 and y == 50:
-                            if position == 'top_left':
-                                x, y = 20, 20
+                        if not logo:
+                            continue
 
-                            elif position == 'top_center':
-                                x = (page_width - w) / 2
-                                y = 20
+                        logo_data = logo.content
 
-                            elif position == 'top_right':
-                                x = page_width - w - 20
-                                y = 20
+                        config = record.env[
+                            'ir.config_parameter'
+                        ].sudo()
 
-                            elif position == 'middle_center':
-                                x = (page_width - w) / 2
-                                y = (page_height - h) / 2
+                        position = config.get_str(
+                            'auto_logo_pdf.logo_position',
+                            default='top_left',
+                        )
+                        x = config.get_int(
+                            'auto_logo_pdf.logo_x',
+                            default=50,
+                        )
+                        y = config.get_int(
+                            'auto_logo_pdf.logo_y',
+                            default=50,
+                        )
+                        w = config.get_int(
+                            'auto_logo_pdf.logo_width',
+                            default=100,
+                        )
+                        h = config.get_int(
+                            'auto_logo_pdf.logo_height',
+                            default=50,
+                        )
 
-                            elif position == 'bottom_center':
-                                x = (page_width - w) / 2
-                                y = page_height - h - 20
+                        for page in pdf:
+                            page_width = page.rect.width
+                            page_height = page.rect.height
 
-                            elif position == 'bottom_right':
-                                x = page_width - w - 20
-                                y = page_height - h - 20
+                            logo_x = x
+                            logo_y = y
 
-                        rect = fitz.Rect(x, y, x + w, y + h)
-                        page.insert_image(rect, stream=logo_data)
+                            if x == 50 and y == 50:
+                                if position == 'top_left':
+                                    logo_x, logo_y = 20, 20
 
-                    new_pdf = pdf.tobytes()
+                                elif position == 'top_center':
+                                    logo_x = (page_width - w) / 2
+                                    logo_y = 20
+
+                                elif position == 'top_right':
+                                    logo_x = page_width - w - 20
+                                    logo_y = 20
+
+                                elif position == 'middle_center':
+                                    logo_x = (page_width - w) / 2
+                                    logo_y = (page_height - h) / 2
+
+                                elif position == 'bottom_center':
+                                    logo_x = (page_width - w) / 2
+                                    logo_y = page_height - h - 20
+
+                                elif position == 'bottom_right':
+                                    logo_x = page_width - w - 20
+                                    logo_y = page_height - h - 20
+
+                            rect = fitz.Rect(
+                                logo_x,
+                                logo_y,
+                                logo_x + w,
+                                logo_y + h,
+                            )
+
+                            page.insert_image(
+                                rect,
+                                stream=logo_data,
+                            )
+
+                    vals['raw'] = pdf.tobytes()
                     pdf.close()
 
-                    record.write({
-                        'raw': new_pdf,
-                    })
+                except Exception as e:
+                    print("Error injecting logo into PDF:", e)
 
-            except Exception as e:
-                print("Error:", e)
-
-        return records
+        return super().write(vals)
