@@ -1,40 +1,59 @@
 import base64
+
 import fitz  # PyMuPDF
-from odoo import models
+
+from odoo import api, models
+
 
 class IrAttachment(models.Model):
     _inherit = 'ir.attachment'
 
-    def create(self, vals):
-        record = super().create(vals)
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
 
-        if record.mimetype == 'application/pdf' and record.datas:
+        for record in records:
+            if record.mimetype != 'application/pdf' or not record.datas:
+                continue
+
             try:
-                pdf_data = base64.b64decode(record.datas)
+                pdf_data = record.datas.content
                 pdf = fitz.open(stream=pdf_data, filetype="pdf")
 
                 company = record.env.company
                 logo = company.logo
 
                 if logo:
-                    logo_data = base64.b64decode(logo)
+                    logo_data = logo.content
 
                     config = record.env['ir.config_parameter'].sudo()
 
-                    # 🔹 get values
-                    position = config.get_param('auto_logo_pdf.logo_position', 'top_left')
-                    x = int(config.get_param('auto_logo_pdf.logo_x', 50))
-                    y = int(config.get_param('auto_logo_pdf.logo_y', 50))
-                    w = int(config.get_param('auto_logo_pdf.logo_width', 100))
-                    h = int(config.get_param('auto_logo_pdf.logo_height', 50))
+                    position = config.get_str(
+                        'auto_logo_pdf.logo_position',
+                        default='top_left',
+                    )
+                    x = config.get_int(
+                        'auto_logo_pdf.logo_x',
+                        default=50,
+                    )
+                    y = config.get_int(
+                        'auto_logo_pdf.logo_y',
+                        default=50,
+                    )
+                    w = config.get_int(
+                        'auto_logo_pdf.logo_width',
+                        default=100,
+                    )
+                    h = config.get_int(
+                        'auto_logo_pdf.logo_height',
+                        default=50,
+                    )
 
                     for page in pdf:
                         page_width = page.rect.width
                         page_height = page.rect.height
 
-                        # 🔥 USE DROPDOWN if X/Y not changed
                         if x == 50 and y == 50:
-
                             if position == 'top_left':
                                 x, y = 20, 20
 
@@ -58,16 +77,17 @@ class IrAttachment(models.Model):
                                 x = page_width - w - 20
                                 y = page_height - h - 20
 
-                        # 🔹 insert image
                         rect = fitz.Rect(x, y, x + w, y + h)
                         page.insert_image(rect, stream=logo_data)
 
                     new_pdf = pdf.tobytes()
                     pdf.close()
 
-                    record.datas = base64.b64encode(new_pdf)
+                    record.write({
+                        'datas': base64.b64encode(new_pdf),
+                    })
 
             except Exception as e:
                 print("Error:", e)
 
-        return record
+        return records
