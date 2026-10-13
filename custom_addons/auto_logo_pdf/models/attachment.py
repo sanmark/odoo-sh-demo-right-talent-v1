@@ -1,73 +1,193 @@
-import base64
-import fitz  # PyMuPDF
-from odoo import models
+
+import logging
+
+import fitz
+
+from odoo import api, models
+
+_logger = logging.getLogger(__name__)
+
+MARK = 'auto_logo_pdf'
+
 
 class IrAttachment(models.Model):
     _inherit = 'ir.attachment'
 
-    def create(self, vals):
-        record = super().create(vals)
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
 
-        if record.mimetype == 'application/pdf' and record.datas:
+        _logger.info(
+            "PDF LOGO DEBUG create: ids=%s stream_upload=%s",
+            records.ids,
+            self.env.context.get('ir_attachment_from_stream'),
+        )
+
+        if not self.env.context.get('ir_attachment_from_stream'):
+            records._inject_logo_into_pdf()
+
+        return records
+
+    def _upload_file(self, file, create_vals):
+        """Inject the logo after Odoo finishes storing an uploaded file."""
+        attachment = super()._upload_file(file, create_vals)
+
+        _logger.info(
+            "PDF LOGO DEBUG upload_file: id=%s name=%s mimetype=%s",
+            attachment.id,
+            attachment.name,
+            attachment.mimetype,
+        )
+
+        attachment._inject_logo_into_pdf()
+        return attachment
+
+    def _post_add_create(self, **kwargs):
+        _logger.info(
+            "PDF LOGO DEBUG post_add_create ENTER: ids=%s",
+            self.ids,
+        )
+
+        result = super()._post_add_create(**kwargs)
+
+        self._inject_logo_into_pdf()
+        return result
+
+    def write(self, vals):
+        result = super().write(vals)
+
+        if 'raw' in vals:
+            _logger.info(
+                "PDF LOGO DEBUG write raw: ids=%s",
+                self.ids,
+            )
+            self._inject_logo_into_pdf()
+
+        return result
+
+    def _inject_logo_into_pdf(self):
+        config = self.env['ir.config_parameter'].sudo()
+
+        position = config.get_str(
+            'auto_logo_pdf.logo_position',
+            default='top_left',
+        )
+        x = config.get_int('auto_logo_pdf.logo_x', default=50)
+        y = config.get_int('auto_logo_pdf.logo_y', default=50)
+        width = config.get_int('auto_logo_pdf.logo_width', default=100)
+        height = config.get_int('auto_logo_pdf.logo_height', default=50)
+
+        for record in self:
             try:
-                pdf_data = base64.b64decode(record.datas)
-                pdf = fitz.open(stream=pdf_data, filetype="pdf")
+                if record.mimetype != 'application/pdf':
+                    continue
 
-                company = record.env.company
-                logo = company.logo
+                raw = record.raw
+                if not raw or not raw.content:
+                    _logger.info(
+                        "PDF LOGO DEBUG no content: attachment=%s",
+                        record.id,
+                    )
+                    continue
 
-                if logo:
-                    logo_data = base64.b64decode(logo)
+                logo = record.company_id.logo or record.env.company.logo
+                if not logo or not logo.content:
+                    _logger.warning(
+                        "PDF LOGO DEBUG company logo missing: attachment=%s",
+                        record.id,
+                    )
+                    continue
 
-                    config = record.env['ir.config_parameter'].sudo()
+                pdf = None
 
-                    # 🔹 get values
-                    position = config.get_param('auto_logo_pdf.logo_position', 'top_left')
-                    x = int(config.get_param('auto_logo_pdf.logo_x', 50))
-                    y = int(config.get_param('auto_logo_pdf.logo_y', 50))
-                    w = int(config.get_param('auto_logo_pdf.logo_width', 100))
-                    h = int(config.get_param('auto_logo_pdf.logo_height', 50))
+                try:
+                    pdf = fitz.open(
+                        stream=raw.content,
+                        filetype='pdf',
+                    )
+
+                    meta = {
+                        key: value
+                        for key, value in (pdf.metadata or {}).items()
+                        if key not in ('format', 'encryption') and value
+                    }
+
+                    if MARK in (meta.get('keywords') or ''):
+                        _logger.info(
+                            "PDF LOGO DEBUG already processed: attachment=%s",
+                            record.id,
+                        )
+                        continue
 
                     for page in pdf:
                         page_width = page.rect.width
                         page_height = page.rect.height
 
-                        # 🔥 USE DROPDOWN if X/Y not changed
+                        logo_x, logo_y = x, y
+
                         if x == 50 and y == 50:
+                            logo_x, logo_y = {
+                                'top_left': (20, 20),
+                                'top_center': (
+                                    (page_width - width) / 2, 20
+                                ),
+                                'top_right': (
+                                    page_width - width - 20, 20
+                                ),
+                                'middle_center': (
+                                    (page_width - width) / 2,
+                                    (page_height - height) / 2,
+                                ),
+                                'bottom_center': (
+                                    (page_width - width) / 2,
+                                    page_height - height - 20,
+                                ),
+                                'bottom_right': (
+                                    page_width - width - 20,
+                                    page_height - height - 20,
+                                ),
+                            }.get(position, (20, 20))
 
-                            if position == 'top_left':
-                                x, y = 20, 20
+                        page.insert_image(
+                            fitz.Rect(
+                                logo_x,
+                                logo_y,
+                                logo_x + width,
+                                logo_y + height,
+                            ),
+                            stream=logo.content,
+                        )
 
-                            elif position == 'top_center':
-                                x = (page_width - w) / 2
-                                y = 20
+                    keywords = (
+                        f"{meta.get('keywords', '')} {MARK}"
+                    ).strip()
 
-                            elif position == 'top_right':
-                                x = page_width - w - 20
-                                y = 20
+                    pdf.set_metadata({
+                        **meta,
+                        'keywords': keywords,
+                    })
 
-                            elif position == 'middle_center':
-                                x = (page_width - w) / 2
-                                y = (page_height - h) / 2
+                    updated_pdf = pdf.tobytes()
 
-                            elif position == 'bottom_center':
-                                x = (page_width - w) / 2
-                                y = page_height - h - 20
+                    if updated_pdf:
+                        # Avoid triggering this class's write() hook again.
+                        super(IrAttachment, record).write({
+                            'raw': updated_pdf,
+                        })
 
-                            elif position == 'bottom_right':
-                                x = page_width - w - 20
-                                y = page_height - h - 20
+                        _logger.info(
+                            "PDF LOGO DEBUG injection completed: "
+                            "attachment=%s name=%s",
+                            record.id,
+                            record.name,
+                        )
 
-                        # 🔹 insert image
-                        rect = fitz.Rect(x, y, x + w, y + h)
-                        page.insert_image(rect, stream=logo_data)
+                finally:
+                    if pdf is not None:
+                        pdf.close()
 
-                    new_pdf = pdf.tobytes()
-                    pdf.close()
-
-                    record.datas = base64.b64encode(new_pdf)
-
-            except Exception as e:
-                print("Error:", e)
-
-        return record
+            except Exception:
+                _logger.exception(
+                    "Failed to inject logo into PDF attachment %s",
+                    record.id,
+                )

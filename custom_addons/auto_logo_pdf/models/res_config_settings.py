@@ -1,4 +1,5 @@
-from odoo import models, fields
+from odoo import fields, models
+
 
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
@@ -22,14 +23,11 @@ class ResConfigSettings(models.TransientModel):
 
         config = self.env['ir.config_parameter'].sudo()
 
-        # 🔹 SAVE position (missing in your code)
-        config.set_param('auto_logo_pdf.logo_position', self.logo_position)
-
-        # 🔹 existing values
-        config.set_param('auto_logo_pdf.logo_x', self.logo_x)
-        config.set_param('auto_logo_pdf.logo_y', self.logo_y)
-        config.set_param('auto_logo_pdf.logo_width', self.logo_width)
-        config.set_param('auto_logo_pdf.logo_height', self.logo_height)
+        config.set_str('auto_logo_pdf.logo_position', self.logo_position)
+        config.set_int('auto_logo_pdf.logo_x', self.logo_x)
+        config.set_int('auto_logo_pdf.logo_y', self.logo_y)
+        config.set_int('auto_logo_pdf.logo_width', self.logo_width)
+        config.set_int('auto_logo_pdf.logo_height', self.logo_height)
 
     def get_values(self):
         res = super().get_values()
@@ -37,14 +35,26 @@ class ResConfigSettings(models.TransientModel):
         config = self.env['ir.config_parameter'].sudo()
 
         res.update(
-            # 🔹 LOAD position (missing in your code)
-            logo_position=config.get_param('auto_logo_pdf.logo_position', default='top_left'),
-
-            # 🔹 existing values
-            logo_x=int(config.get_param('auto_logo_pdf.logo_x', default=50)),
-            logo_y=int(config.get_param('auto_logo_pdf.logo_y', default=50)),
-            logo_width=int(config.get_param('auto_logo_pdf.logo_width', default=100)),
-            logo_height=int(config.get_param('auto_logo_pdf.logo_height', default=50)),
+            logo_position=config.get_str(
+                'auto_logo_pdf.logo_position',
+                default='top_left',
+            ),
+            logo_x=config.get_int(
+                'auto_logo_pdf.logo_x',
+                default=50,
+            ),
+            logo_y=config.get_int(
+                'auto_logo_pdf.logo_y',
+                default=50,
+            ),
+            logo_width=config.get_int(
+                'auto_logo_pdf.logo_width',
+                default=100,
+            ),
+            logo_height=config.get_int(
+                'auto_logo_pdf.logo_height',
+                default=50,
+            ),
         )
 
         return res
