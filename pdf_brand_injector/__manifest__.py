@@ -38,7 +38,7 @@ Contact us for customization or support.
     'category': 'Tools',
     'author': 'Sanmark Solutions',
     'website': 'https://sanmarksolutions.com/',
-    'license': 'LGPL-3',
+    'license': 'OPL-1',
 
     'depends': ['base', 'web'],
 
