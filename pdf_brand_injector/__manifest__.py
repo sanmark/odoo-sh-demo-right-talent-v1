@@ -1,6 +1,6 @@
 {
     'name': 'PDF Brand Injector',
-    'version': '1.1.0',
+    'version': '20.0.1.0.0',
     'summary': 'Automatically inject your company logo into PDF files with smart positioning',
     'description': """
 PDF Brand Injector
